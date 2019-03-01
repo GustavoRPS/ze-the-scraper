@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime, timezone
 
-from datetime import datetime
+from w3lib.html import remove_tags
 from scrapy import Item, Field
 from scrapy.loader import ItemLoader as ScrapyItemLoader
-from scrapy.loader.processors import Join, TakeFirst, MapCompose
-from w3lib.html import remove_tags
-from ..processors.common import CleanString, ParseDate
+from scrapy.loader.processors import Join, TakeFirst, MapCompose, Compose
+
+from ..processors.common import *
 from ..processors.schema import AuthorParse, KeywordsParse
 
+# from .thing.product import ProductItem
+
+
 class ItemLoader(ScrapyItemLoader):
-    
+
     def get_collected_values(self, field_name):
         return (self._values[field_name]
                 if field_name in self._values
@@ -22,21 +26,20 @@ class ItemLoader(ScrapyItemLoader):
     def add_fallback_xpath(self, field_name, css, *processors, **kw):
         if not any(self.get_collected_values(field_name)):
             self.add_xpath(field_name, css, *processors, **kw)
-    
+
     def load_item(self):
         item = self.item
         
         for field_name in tuple(self._values):
+            default_value = self.item.fields[field_name].get('default')
             value = self.get_output_value(field_name)
+            
             if value is not None:
                 item[field_name] = value
+            elif not item.get(field_name) and default_value:
+                item[field_name] = default_value
         
-        for field_name in self.item.fields:
-            default_value = self.item.fields[field_name].get('default')
-            if not item.get(field_name) and default_value:
-                item[field_name] = self.item.fields[field_name].get('default')
-        
-        item['dateCreated'] = datetime.utcnow()
+        # item['dateCreated'] = datetime.now(timezone.utc)
         
         return item
 
@@ -55,11 +58,13 @@ class ThingItem(BaseItem):
         output_processor=TakeFirst(),
     )
     description = Field(
-        input_processor=MapCompose(CleanString()),
-        output_processor=TakeFirst(),
+        input_processor=MapCompose(ScapeString()),
+        # output_processor=MapCompose(TakeFirst()),
+        # input_processor =MapCompose(TakeFirst()),
         schemas={
             'avro': {
-                'field_type': 'STRING', 
+                'name': 'description',
+                'type': ('null', 'string'),
             }, 
         }
     )
@@ -70,11 +75,11 @@ class ThingItem(BaseItem):
         output_processor=TakeFirst(),
     )
     image = Field(
-        default=['null'], 
-        indexed=False, 
+        input_processor=MapCompose(ValidURL()),
         schemas={
             'avro': {
-                'field_type': 'STRING', 
+                'name': 'image',
+                'type': ('null', 'string'), 
             }, 
         }
     )
@@ -87,7 +92,8 @@ class ThingItem(BaseItem):
         output_processor=TakeFirst(),
         schemas={
             'avro': {
-                'field_type': 'STRING', 
+                'name': 'name',
+                'type': ('null', 'string'), 
             }, 
         }
     )
@@ -96,19 +102,20 @@ class ThingItem(BaseItem):
     )
     sameAs = Field(
         output_processor=TakeFirst(),
-        # schemas = {
-        #     'avro': {
-        #         'field_type': 'STRING',
-        #         'mode': 'REPEATED',
-        #     }, 
-        # }
+        schemas = {
+            'avro': {
+                'name': 'sameAs',
+                'type': ('null', 'string'),
+                'mode': 'repeated',
+            }, 
+        }
     )
     url = Field(
-        output_processor=TakeFirst(),
-        indexed=False, 
+        output_processor=Compose(FormatString(), TakeFirst()),
         schemas={
             'avro': {
-                'field_type': 'STRING', 
+                'name': 'url',
+                'type': ('null', 'string'), 
             }, 
         }
     )
@@ -116,12 +123,12 @@ class ThingItem(BaseItem):
 
 class CreativeWorkItem(ThingItem):
     about = Field(
-        # schemas={
-        #     'avro': {
-        #         'field_type': 'STRING', 
-        #         'mode': 'REPEATED', 
-        #     }, 
-        # }
+        schemas={
+            'avro': {
+                'name': 'about',
+                'type': ('null', 'string'), 
+            }, 
+        }
     )
     accessMode = Field()
     accessModeSufficient = Field()
@@ -139,23 +146,23 @@ class CreativeWorkItem(ThingItem):
     author = Field(
         default=[{'type': None, 'name': None}], 
         input_processor=MapCompose(remove_tags, AuthorParse()), 
-        indexed=False, 
         schemas = {
             'avro': {
-                'field_type': 'RECORD', 
-                'mode': 'REPEATED', 
+                'name': 'author',
+                'type': ('null', 'record'), 
+                'mode': 'repeated', 
                 'fields': ({
                     'name': 'name', 
-                    'field_type': 'STRING', 
+                    'type': 'string', 
                 },{
                     'name': 'type', 
-                    'field_type': 'STRING', 
+                    'type': 'string', 
                 })
             }, 
             'datastore': {
-                'field_type': 'arrayValue', 
+                'type': 'arrayValue', 
                 'values': {
-                    'field_type': 'entityValue'
+                    'type': 'entityValue'
                 }
             }
         }
@@ -166,11 +173,11 @@ class CreativeWorkItem(ThingItem):
     comment = Field()
     commentCount = Field(
         output_processor = TakeFirst(),
-        # schemas={
-        #     'avro': {
-        #         'field_type': 'INTEGER', 
-        #     }, 
-        # }
+        schemas={
+            'avro': {
+                'type': ('null', 'integer'), 
+            }, 
+        }
     )
     contentLocation = Field()
     contentRating = Field()
@@ -182,27 +189,27 @@ class CreativeWorkItem(ThingItem):
     dateCreated = Field(
         schemas = {
             'avro': {
-                'field_type': 'TIMESTAMP', 
+                'type': ('null', 'timestamp'), 
             }, 
         }
     )
     # TODO: User array with multiple dates to chose the best
     dateModified = Field(
-        input_processor=MapCompose(ParseDate()),
+        input_processor=MapCompose(ParseDate('dateModified')),
         output_processor=TakeFirst(),
         schemas = {
             'avro': {
-                'field_type': 'TIMESTAMP', 
+                'type': ('null', 'timestamp'), 
             }, 
         }
     )
     # TODO: User array with multiple dates to chose the best
     datePublished = Field(
-        input_processor=MapCompose(ParseDate()),
+        input_processor=MapCompose(ParseDate('datePublished')),
         output_processor=TakeFirst(),
         schemas={
             'avro': {
-                'field_type': 'TIMESTAMP',
+                'type': ('null', 'timestamp'),
             }
         }
     )
@@ -219,36 +226,36 @@ class CreativeWorkItem(ThingItem):
     headline = Field()
     inLanguage = Field()
     interactionStatistic = Field(
-        # schemas={
-        #     'avro': {
-        #         'field_type': 'RECORD',
-        #         'mode': 'REPEATED',
-        #         'fields': [{ 
-        #                 'name': 'interactionType',
-        #                 'field_type': 'STRING',
-        #             },{
-        #                 'name': 'userInteractionCount',
-        #                 'field_type': 'INTEGER',
-        #             },{ 
-        #                 'name': 'type',
-        #                 'field_type': 'STRING',
-        #             },{
-        #                 'name': 'interactionService',
-        #                 'field_type': 'RECORD',
-        #                 'mode': 'REPEATED',
-        #                 'fields': [{ 
-        #                         'name': 'url',
-        #                         'field_type': 'STRING',
-        #                     },{ 
-        #                         'name': 'name',
-        #                         'field_type': 'STRING',
-        #                     },{ 
-        #                         'name': 'type',
-        #                         'field_type': 'STRING',
-        #                 }]
-        #         }]
-        #     }
-        # }
+        schemas={
+            'avro': {
+                'type': ('null', 'record'),
+                'mode': 'repeated',
+                'fields': [{ 
+                        'name': 'interactionType',
+                        'type': 'string',
+                    },{
+                        'name': 'userInteractionCount',
+                        'type': 'integer',
+                    },{ 
+                        'name': 'type',
+                        'type': 'string',
+                    },{
+                        'name': 'interactionService',
+                        'type': ('null', 'record'),
+                        'mode': 'repeated',
+                        'fields': [{ 
+                                'name': 'url',
+                                'type': 'string',
+                            },{ 
+                                'name': 'name',
+                                'type': 'string',
+                            },{ 
+                                'name': 'type',
+                                'type': 'string',
+                        }]
+                }]
+            }
+        }
     )
     interactivityType = Field()
     isAccessibleForFree = Field()
@@ -256,13 +263,10 @@ class CreativeWorkItem(ThingItem):
     isFamilyFriendly = Field()
     isPartOf = Field()
     keywords = Field(
-        input_processor=MapCompose(
-            KeywordsParse()
-        ),
-        output_processor=Join(','),
+        output_processor=MapCompose(KeywordsParse()),
         schemas={
             'avro': {
-                'field_type': 'STRING'
+                'type': ('null', 'string')
             }
         }
     )
@@ -295,3 +299,108 @@ class CreativeWorkItem(ThingItem):
     version = Field()
     video = Field()
     workExample = Field()
+
+
+class ProductItem(ThingItem):
+    
+    gtin13 = Field(
+        output_processor=TakeFirst(),
+    )
+    gtin14 = Field(
+        output_processor=TakeFirst(),
+    )
+    brand = Field(
+        input_processor=MapCompose(CleanString()),
+        output_processor=TakeFirst(),
+    )
+    price = Field(
+        output_processor=TakeFirst(),
+    )
+    category = Field(
+        output_processor=TakeFirst(),
+    )
+    subcategory = Field(
+        output_processor=TakeFirst(),
+    )
+    sku = Field(
+        output_processor=TakeFirst(),
+    )
+    itemCondition = Field(
+        output_processor=TakeFirst(),
+    )
+    mpn = Field(
+        input_processor=MapCompose(CleanString()),
+        output_processor=TakeFirst(),
+    )
+    brand = Field(
+        input_processor=MapCompose(CleanString()),
+        output_processor=TakeFirst(),
+    )
+    offers_priceCurrency = Field(
+        output_processor=TakeFirst(),
+    )
+    offers_price = Field(
+        output_processor=TakeFirst(),
+    )
+    offers_eligibleQuantity = Field(
+        input_processor=MapCompose(CleanString()),
+        output_processor=TakeFirst(),
+    )
+    offers_availability = Field(
+        output_processor=TakeFirst(),
+    )
+    links = Field(
+        output_processor=TakeFirst(),
+    )
+    composicao_new = Field(
+        output_processor=TakeFirst(),
+    )
+    ingredientes = Field(
+        output_processor=TakeFirst(),
+    )
+    beneficios = Field(
+        output_processor=TakeFirst(),
+    )
+    tx_principal_indicacao = Field(
+        output_processor=TakeFirst(),
+    )
+    tx_contra_indicacao = Field(
+        output_processor=TakeFirst(),
+    )
+    seleciona_cores = Field(
+        output_processor=TakeFirst(),
+    )
+    tipo = Field(
+        output_processor=TakeFirst(),
+    )
+    seleciona_tipo_cabelos = Field(
+        output_processor=TakeFirst(),
+    )
+    especificacoes = Field(
+        output_processor=TakeFirst(),
+    )
+    inmetro = Field(
+        output_processor=TakeFirst(),
+    )
+    selos_do_produto = Field(
+        output_processor=TakeFirst(),
+    )
+    garantia_numero = Field(
+        output_processor=TakeFirst(),
+    )
+    conteudo_embalagem = Field(
+        output_processor=TakeFirst(),
+    )
+    voltagem = Field(
+        output_processor=TakeFirst(),
+    )
+    nr_sac_facricante = Field(
+        output_processor=TakeFirst(),
+    )
+    nr_ministerio_da_saude = Field(
+        output_processor=TakeFirst(),
+    )
+    tx_msg_anvisa = Field(
+        output_processor=TakeFirst(),
+    )
+    

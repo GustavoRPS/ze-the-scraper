@@ -1,0 +1,15 @@
+language: python
+python:
+  - "3.4"
+  - "3.5"
+  - "3.6"
+cache: pip
+env:
+  - LOG_LEVEL=DEBUG
+install:
+  - pip install -r "requirements.txt"
+script:
+  - scrapy settings
+  - scrapy list | wc -w
+  - scrapy bench
+  - scrapy crawl all -a query="${SEARCH_QUERY}" -a dateRestrict="${SEARCH_PERIOD}"

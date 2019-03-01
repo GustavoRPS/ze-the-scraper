@@ -22,10 +22,9 @@ class ArticleItem(CreativeWorkItem):
         required=True,
         input_processor=MapCompose(ImproveHTML(),),
         output_processor=TakeFirst(), 
-        indexed=False, 
         schemas={
             'avro': {
-                'field_type': 'STRING', 
+                'type': 'string', 
             }, 
         }
     )
@@ -46,6 +45,38 @@ class ArticleItem(CreativeWorkItem):
     wordCount = Field()
 
 
+class MediaObjectItem(CreativeWorkItem):
+    
+    author = Field()
+    image = Field()
+    
+    associatedArticle = Field()
+    bitrate = Field()
+    contentSize = Field()
+    contentUrl = Field()
+    duration = Field()
+    embedUrl = Field()
+    encodesCreativeWork = Field()
+    encodingFormat = Field()
+    height = Field()
+    playerType = Field()
+    productionCompany = Field()
+    regionsAllowed = Field()
+    requiresSubscription = Field()
+    uploadDate = Field()
+    width = Field()
+
+
+class AudioObjectItem(MediaObjectItem):
+    
+    transcript = Field()
+
+
+class VideoObjectItem(MediaObjectItem):
+    
+    transcript = Field()
+
+
 class NewsArticleItem(ArticleItem):
 
     dateline = Field()
@@ -53,3 +84,11 @@ class NewsArticleItem(ArticleItem):
     printEdition = Field()
     printPage = Field()
     printSection = Field()
+
+
+class SocialMediaPosting(ArticleItem):
+    task = Field()
+    keyword = Field()
+    type = Field()
+    timestamp = Field()
+    post_data = Field()
